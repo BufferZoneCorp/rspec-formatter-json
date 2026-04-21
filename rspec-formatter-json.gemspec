@@ -1,6 +1,6 @@
 Gem::Specification.new do |s|
   s.name        = 'knot-rspec-formatter-json'
-  s.version     = '3.13.1'
+  s.version     = '3.13.2'
   s.summary     = 'JSON formatter for RSpec test output'
   s.description = 'Formats RSpec output as JSON for CI/CD pipelines, test reporting dashboards, and tooling integrations.'
   s.authors     = ['rspec-community']

